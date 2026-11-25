@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Steel Eggs</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#bfe4ff;font-family:system-ui,Arial;color:white;touch-action:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#brand{position:absolute;top:12px;left:14px;font-size:clamp(19px,3vw,30px);font-weight:1000;text-shadow:0 3px 0 #16385f,0 5px 8px #16385f}
+#stats{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.pill{background:linear-gradient(#fff0b8,#ffbf38);color:#392b10;border:3px solid #714b24;border-radius:15px;padding:7px 12px;font-weight:950;white-space:nowrap;box-shadow:0 3px 0 #70431d}
+.blue{background:linear-gradient(#d8f4ff,#65c8f6);color:#123b62;border-color:#24517b}
+.menu{position:absolute;top:82px;left:12px;display:grid;gap:8px}.right{left:auto;right:12px}
+button{font:inherit;font-weight:900;color:white;background:linear-gradient(#69c3ff,#2876ca);border:2px solid #d8f4ff;border-radius:13px;padding:9px 13px;box-shadow:0 3px 0 #174875}
+#hint{position:absolute;bottom:19px;left:50%;transform:translateX(-50%);background:#183957dd;padding:10px 15px;border-radius:14px;font-size:13px;font-weight:800;white-space:nowrap}
+#joy{position:absolute;left:22px;bottom:25px;width:132px;height:132px;border-radius:50%;background:#719ec5bb;border:7px solid #d8efff99;display:none;touch-action:none}
+#nub{position:absolute;left:35px;top:35px;width:48px;height:48px;border-radius:50%;background:linear-gradient(#ffa9f1,#b638c8);border:5px solid white;box-shadow:0 3px 6px #234}
+#jump,#collect{position:absolute;right:22px;bottom:27px;width:86px;height:86px;border-radius:50%;display:none;background:linear-gradient(#f7a6f1,#a33cc2);border:4px solid white}
+#collect{right:116px;bottom:48px;width:65px;height:65px;background:linear-gradient(#ffe58b,#e99a24);color:#50300a}
+#toast{position:absolute;top:78px;left:50%;transform:translateX(-50%);background:#183957ed;border-radius:14px;padding:10px 15px;font-weight:850;text-align:center;display:none;max-width:90vw}
+#panel{position:absolute;inset:0;background:#07182bbd;display:none;place-items:center;padding:18px}
+#card{width:min(420px,94vw);background:#183957;border:2px solid #9fd8ff;border-radius:18px;padding:18px;box-shadow:0 7px 0 #10283e}
+#card h2{margin:0 0 10px}#card p{line-height:1.5}#card button{margin:5px}
+#chat{position:absolute;right:14px;bottom:14px;width:235px;background:#183957eF;border:2px solid #8ccfff;border-radius:16px;padding:10px;font-size:12px}
+#chat input{width:100%;padding:9px;border-radius:9px;border:1px solid #9fd8ff;margin-top:7px}
+@media(max-width:650px){#chat{display:none}#hint{bottom:165px;font-size:11px}.menu{top:75px}.menu button{padding:7px 9px;font-size:12px}.right button{font-size:12px}#stats{top:58px}}
+</style></head><body>
+<canvas id="game"></canvas><div id="brand">🥚 STEEL EGGS</div>
+<div id="stats"><div class="pill" id="coins">🪙 25</div><div class="pill blue" id="speed">⚡ Speed 1</div><div class="pill blue" id="pets">🐾 Pets 0</div></div>
+<div class="menu"><button onclick="panel('pets')">🐾 Pets</button><button onclick="panel('worlds')">🌍 Worlds</button><button onclick="panel('speed')">⚡ Speed shop</button></div>
+<div class="menu right"><button onclick="panel('friends')">👥 Friends</button><button onclick="panel('help')">❔ Help</button></div>
+<div id="hint">WASD / arrows to move · Space to jump · E to collect</div><div id="toast"></div>
+<div id="joy"><div id="nub"></div></div><button id="jump">JUMP</button><button id="collect">🥚</button>
+<div id="chat"><b>💬 Lobby chat (local demo)</b><div id="messages">System: Welcome to Steel Eggs!</div><input id="chatinput" placeholder="Say something…"></div>
+<div id="panel"><div id="card"><h2 id="ptitle"></h2><div id="pbody"></div><button onclick="closePanel()">Close</button></div></div>
+<script>
+const c=document.getElementById('game'),ctx=c.getContext('2d');let W,H,dpr=1;
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,1.5);c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
+let px=0,pz=8,coins=25,speed=1,eggs=0,pets=0,jump=0,vy=0,dragon=false,dx=17,dz=-22,keys={},joy={x:0,y:0,active:false},time=0;
+const iso=(x,z,y=0)=>({x:W/2+(x-px)*24-(z-pz)*24,y:H*.48+(x-px)*12+(z-pz)*12-y*24});
+function poly(points,fill,stroke){ctx.beginPath();points.forEach((p,i)=>{let q=iso(...p);i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y)});ctx.closePath();ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke()}}
+function box(x,z,w,d,h,color){let a=iso(x-w/2,z-d/2),b=iso(x+w/2,z-d/2),cc=iso(x+w/2,z+d/2),e=iso(x-w/2,z+d/2),aa=iso(x-w/2,z-d/2,h),bb=iso(x+w/2,z-d/2,h),ccc=iso(x+w/2,z+d/2,h),ee=iso(x-w/2,z+d/2,h);poly([[x-w/2,z-d/2,h],[x+w/2,z-d/2,h],[x+w/2,z+d/2,h],[x-w/2,z+d/2,h]],color);poly([[x-w/2,z-d/2,0],[x+w/2,z-d/2,0],[x+w/2,z-d/2,h],[x-w/2,z-d/2,h]],'#9a5427');poly([[x+w/2,z-d/2,0],[x+w/2,z+d/2,0],[x+w/2,z+d/2,h],[x+w/2,z-d/2,h]],'#713b24')}
+function tree(x,z){let p=iso(x,z);ctx.fillStyle='#754525';ctx.fillRect(p.x-4,p.y-34,8,35);for(let i=0;i<3;i++){ctx.fillStyle=['#147b50','#168b56','#26a56a'][i];ctx.beginPath();ctx.moveTo(p.x,p.y-92+i*19);ctx.lineTo(p.x-27+i*5,p.y-34+i*15);ctx.lineTo(p.x+27-i*5,p.y-34+i*15);ctx.closePath();ctx.fill()}ctx.fillStyle='#fff';ctx.fillRect(p.x-24,p.y-39,48,5)}
+function fence(x,z,w,d,color){let corners=[[x-w/2,z-d/2],[x+w/2,z-d/2],[x+w/2,z+d/2],[x-w/2,z+d/2]];corners.forEach((v,i)=>{let a=iso(v[0],v[1]),b=iso(v[0]+(i===0||i===3?0:0),v[1]);ctx.fillStyle=color;ctx.fillRect(a.x-3,a.y-28,7,30)});for(let i of [0,2]){let a=iso(corners[i][0],corners[i][1]),b=iso(corners[i+1][0],corners[i+1][1]);ctx.strokeStyle=color;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(a.x,a.y-20);ctx.lineTo(b.x,b.y-20);ctx.moveTo(a.x,a.y-8);ctx.lineTo(b.x,b.y-8);ctx.stroke()}}
+function egg(x,z,color='#ffdf7b'){let p=iso(x,z,1);ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(p.x,p.y,11,15,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff2bf';ctx.lineWidth=2;ctx.stroke()}
+function character(x,z,color='#168ce0',isDragon=false){let p=iso(x,z,jump);ctx.fillStyle='#0003';ctx.beginPath();ctx.ellipse(p.x,p.y+2,14,6,0,0,7);ctx.fill();if(isDragon){ctx.fillStyle='#7e50d8';ctx.beginPath();ctx.ellipse(p.x,p.y-22,21,17,0,0,7);ctx.fill();ctx.fillStyle='#b99aff';ctx.beginPath();ctx.moveTo(p.x-10,p.y-30);ctx.lineTo(p.x-29,p.y-48);ctx.lineTo(p.x-24,p.y-17);ctx.fill();ctx.beginPath();ctx.moveTo(p.x+10,p.y-30);ctx.lineTo(p.x+29,p.y-48);ctx.lineTo(p.x+24,p.y-17);ctx.fill();ctx.fillStyle='white';ctx.fillRect(p.x-8,p.y-26,4,5);ctx.fillRect(p.x+5,p.y-26,4,5);return}
+ctx.fillStyle='#174f9c';ctx.fillRect(p.x-8,p.y-21,7,21);ctx.fillRect(p.x+2,p.y-21,7,21);ctx.fillStyle=color;ctx.fillRect(p.x-13,p.y-48,26,29);ctx.fillStyle='#e6b58e';ctx.beginPath();ctx.arc(p.x,p.y-56,11,0,7);ctx.fill();ctx.fillStyle='#573b2b';ctx.fillRect(p.x-10,p.y-65,20,8)}
+function draw(){ctx.clearRect(0,0,W,H);let grd=ctx.createLinearGradient(0,0,0,H);grd.addColorStop(0,'#b9e1ff');grd.addColorStop(1,'#eff8ff');ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+for(let z=-32;z<38;z+=4)for(let x=-34;x<35;x+=4){let p=iso(x,z);ctx.fillStyle=((x+z)/4)%2?'#eaf0f5':'#f8f5ed';ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+96,p.y+48);ctx.lineTo(p.x,p.y+96);ctx.lineTo(p.x-96,p.y+48);ctx.fill()}
+ // distant scenery
+ for(let x=-24;x<=24;x+=8)tree(x,-29);
+ // farms and fences
+ fence(-12,7,12,10,'#356ca8');fence(0,7,12,10,'#c76b31');fence(12,7,12,10,'#32965e');
+ box(-12,7,2.5,2,1.3,'#e5b841');let chest=iso(-12,7,1.6);ctx.fillStyle='#ffd54b';ctx.fillRect(chest.x-24,chest.y-8,48,17);
+ box(0,7,2,1.5,1,'#c27b42');let sign=iso(0,5,2);ctx.fillStyle='#57331e';ctx.fillRect(sign.x-35,sign.y-28,70,24);ctx.fillStyle='white';ctx.font='bold 10px Arial';ctx.textAlign='center';ctx.fillText('ANIMAL PEN',sign.x,sign.y-12);
+ // treadmill
+ box(21,8,4,7,.35,'#b76b2b');box(21,8,2.7,5,.45,'#66727c');let t=iso(21,4,1);ctx.fillStyle='#39434d';ctx.fillRect(t.x-20,t.y-7,40,14);
+ // path to worlds
+ poly([[-3,14],[-1,14],[-1,32],[-3,32]],'#d7b78a');
+ tree(-14,-8);tree(14,-10);tree(-20,13);tree(23,-17);
+ // egg nest / dragon zone
+ let n=iso(11,-22);ctx.fillStyle='#8a6339';ctx.beginPath();ctx.ellipse(n.x,n.y,22,8,0,0,7);ctx.fill();if(eggs===0)egg(11,-22);
+ if(dragon)character(dx,dz,'',true);else {let q=iso(14,-22);ctx.fillStyle='#8b77b9';ctx.font='bold 11px Arial';ctx.fillText('🐉 Sleeping dragon',q.x-36,q.y-38)}
+ character(px,pz);
+ // floating level marker
+ let l=iso(0,25);ctx.fillStyle='#fff';ctx.font='bold 15px Arial';ctx.textAlign='center';ctx.fillText('🌲 FOREST  •  LEVEL 1',l.x,l.y);
+ requestAnimationFrame(draw)}
+draw();
+function updateUI(){document.getElementById('coins').textContent='🪙 '+coins;document.getElementById('speed').textContent='⚡ Speed '+speed;document.getElementById('pets').textContent='🐾 Pets '+pets}
+function say(t){let el=document.getElementById('toast');el.textContent=t;el.style.display='block';clearTimeout(say.t);say.t=setTimeout(()=>el.style.display='none',3000)}
+function move(dt){let x=0,y=0;if(keys.a||keys.arrowleft)x--;if(keys.d||keys.arrowright)x++;if(keys.w||keys.arrowup)y--;if(keys.s||keys.arrowdown)y++;x+=joy.x;y+=joy.y;let m=Math.hypot(x,y);if(m>1){x/=m;y/=m}let v=(3+speed*.7)*dt;px=Math.max(-30,Math.min(30,px+x*v));pz=Math.max(-30,Math.min(34,pz+y*v));if(dragon){let ax=px-dx,az=pz-dz,dist=Math.hypot(ax,az);if(dist>1){dx+=ax/dist*dt*2.7;dz+=az/dist*dt*2.7}if(dist<1.5){dragon=false;eggs=0;dx=17;dz=-22;say('The dragon caught you! The egg returned to its nest.');}}
+}
+let last=performance.now();function tick(now){let dt=Math.min((now-last)/1000,.04);last=now;time+=dt;move(dt);if(jump>0){jump+=vy*dt;vy-=14*dt;if(jump<=0){jump=0;vy=0}}requestAnimationFrame(tick)}requestAnimationFrame(tick);
+addEventListener('keydown',e=>{let k=e.key.toLowerCase();keys[k]=true;if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();if(k===' '&&jump===0){jump=.01;vy=5.5}if(k==='e')collect()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+function collect(){if(Math.hypot(px-11,pz+22)>3.5){say('Find the egg in the forest first!');return}if(speed<4){say('You need Speed 4 to escape the dragon. Train on the treadmill!');return}if(eggs){say('Hatch your egg first!');return}eggs=1;dragon=true;coins+=5;updateUI();say('You got the egg! The dragon woke up — RUN!')}
+document.getElementById('collect').onclick=collect;document.getElementById('jump').onclick=()=>{if(jump===0){jump=.01;vy=5.5}};
+const joyEl=document.getElementById('joy'),nub=document.getElementById('nub');
+function joyAt(e){let r=joyEl.getBoundingClientRect(),dx=e.clientX-r.left-r.width/2,dy=e.clientY-r.top-r.height/2,len=Math.hypot(dx,dy),max=40;if(len>max){dx=dx/len*max;dy=dy/len*max}joy.x=dx/max;joy.y=dy/max;nub.style.transform=`translate(${dx}px,${dy}px)`}
+function joyEnd(){joy.active=false;joy.x=joy.y=0;nub.style.transform='translate(0,0)'}
+joyEl.addEventListener('pointerdown',e=>{joy.active=true;joyEl.setPointerCapture(e.pointerId);joyAt(e)});joyEl.addEventListener('pointermove',e=>{if(joy.active)joyAt(e)});joyEl.addEventListener('pointerup',joyEnd);joyEl.addEventListener('pointercancel',joyEnd);
+if('ontouchstart'in window){joyEl.style.display='block';document.getElementById('jump').style.display='block';document.getElementById('collect').style.display='block'}
+function panel(which){let title='',body='';if(which==='speed'){title='⚡ Speed training';body=`<p>Current speed: <b>${speed}</b></p><p>Upgrade speed for 25 coins.</p><button onclick="buySpeed()">Upgrade · 25 🪙</button>`}
+if(which==='pets'){title='🐾 Your pets';body=`<p>You have ${pets} pets. Eggs collected: ${eggs}.</p><button onclick="hatch()">Hatch egg</button>`}
+if(which==='worlds'){title='🌍 Worlds';body='<p>🌲 Forest — unlocked</p><p>🦁 Savanna — coming soon</p><p>🏖️ Beach — coming soon</p>'}
+if(which==='friends'){title='👥 Friends';body='<p>Friend username demo. Real online joining needs a hosted multiplayer server.</p><input id="friend" placeholder="Friend username" style="padding:10px;width:100%;border-radius:8px"><button onclick="sayFriend()">Add friend</button>'}
+if(which==='help'){title='🎮 How to play';body='<p>Move with WASD / arrow keys or the iPad joystick. Jump with Space / JUMP. Find the egg in the forest. Upgrade to Speed 4 at the treadmill, then collect it and escape the dragon.</p>'}
+document.getElementById('ptitle').textContent=title;document.getElementById('pbody').innerHTML=body;document.getElementById('panel').style.display='grid'}
+function closePanel(){document.getElementById('panel').style.display='none'}
+function buySpeed(){if(coins<25){say('Not enough coins yet!');return}coins-=25;speed++;updateUI();panel('speed');say('Speed upgraded!')}
+function hatch(){if(!eggs){say('You need to collect an egg first!');return}eggs=0;pets++;updateUI();closePanel();say('Your egg hatched into a new pet!')}
+function sayFriend(){let v=document.getElementById('friend').value.trim();say(v?'Friend request demo sent to '+v:'Type a username first!')}
+document.getElementById('chatinput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim()){document.getElementById('messages').textContent='You: '+e.target.value.trim();e.target.value=''}});
+</script></body></html>
